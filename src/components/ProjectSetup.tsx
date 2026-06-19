@@ -1,12 +1,15 @@
 import React from 'react';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, FolderOpen, Clock } from 'lucide-react';
 import { LockMapProject, RoomStructure } from '../types/lockmap';
+import type { SavedProjectMeta } from '../lib/pocketbase';
 
 interface Props {
   project: LockMapProject;
   onChange: (updated: LockMapProject) => void;
   onLoadDemo: () => void;
   onNext: () => void;
+  savedProjects?: SavedProjectMeta[];
+  onLoadSaved?: (meta: SavedProjectMeta) => void;
 }
 
 const ROOM_STRUCTURES: { value: RoomStructure; label: string; desc: string }[] = [
@@ -24,7 +27,7 @@ const DESIGN_STAGES = [
   'Operational',
 ];
 
-export default function ProjectSetup({ project, onChange, onLoadDemo, onNext }: Props) {
+export default function ProjectSetup({ project, onChange, onLoadDemo, onNext, savedProjects, onLoadSaved }: Props) {
   function set(field: keyof LockMapProject, value: string) {
     onChange({ ...project, [field]: value });
   }
@@ -36,13 +39,41 @@ export default function ProjectSetup({ project, onChange, onLoadDemo, onNext }: 
         <p className="text-slate-400 text-sm">Define the creative and operational context for your lock mapping audit.</p>
       </div>
 
-      <button
-        onClick={onLoadDemo}
-        className="mb-8 flex items-center gap-2 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm font-medium hover:bg-amber-500/20 transition-colors"
-      >
-        <Sparkles className="w-4 h-4" />
-        Load Demo Project — Victorian Séance Room
-      </button>
+      <div className="mb-8 flex flex-wrap gap-3">
+        <button
+          onClick={onLoadDemo}
+          className="flex items-center gap-2 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm font-medium hover:bg-amber-500/20 transition-colors"
+        >
+          <Sparkles className="w-4 h-4" />
+          Load Demo Project — Victorian Séance Room
+        </button>
+      </div>
+
+      {savedProjects && savedProjects.length > 0 && onLoadSaved && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">
+            <FolderOpen className="w-3.5 h-3.5" />
+            Resume Saved Project
+          </div>
+          <div className="space-y-2">
+            {savedProjects.map((meta) => (
+              <button
+                key={meta.id}
+                onClick={() => onLoadSaved(meta)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-slate-700 bg-slate-900/60 text-left hover:border-cyan-500/40 hover:bg-cyan-500/5 transition-all group"
+              >
+                <span className="text-sm font-medium text-slate-200 group-hover:text-white">
+                  {meta.title || 'Untitled Project'}
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-slate-500 group-hover:text-slate-400 shrink-0 ml-4">
+                  <Clock className="w-3 h-3" />
+                  {new Date(meta.savedAt).toLocaleDateString()}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4">

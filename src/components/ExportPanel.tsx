@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Download, Check } from 'lucide-react';
+import { Copy, Download, Check, Loader2 } from 'lucide-react';
 import { LockMapProject, LockMappingConflict, ImplementationCard } from '../types/lockmap';
 import { exportToMarkdown } from '../utils/exportMarkdown';
 
@@ -8,9 +8,10 @@ interface Props {
   conflicts: LockMappingConflict[];
   cards: ImplementationCard[];
   onBack: () => void;
+  isSaving?: boolean;
 }
 
-export default function ExportPanel({ project, conflicts, cards, onBack }: Props) {
+export default function ExportPanel({ project, conflicts, cards, onBack, isSaving }: Props) {
   const [copied, setCopied] = useState(false);
 
   const markdown = exportToMarkdown(project, conflicts, cards);
@@ -53,7 +54,14 @@ export default function ExportPanel({ project, conflicts, cards, onBack }: Props
 
       <div className="mt-10 flex justify-between items-center">
         <button onClick={onBack} className="btn-ghost text-sm">Back</button>
-        <div className="text-xs text-slate-600">Phase 2 will add PocketBase save / load and PDF export.</div>
+        {isSaving ? (
+          <span className="flex items-center gap-1.5 text-xs text-slate-400">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Saving…
+          </span>
+        ) : (
+          <span className="text-xs text-slate-600">Project saved to your account.</span>
+        )}
       </div>
     </div>
   );
