@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Pencil, Trash2, Check, X, ArrowRight } from 'lucide-react';
 import { LockMapProject, Zone } from '../types/lockmap';
 
