@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Copy, Download, Check, Loader2 } from 'lucide-react';
 import { LockMapProject, LockMappingConflict, ImplementationCard } from '../types/lockmap';
 import { exportToMarkdown } from '../utils/exportMarkdown';

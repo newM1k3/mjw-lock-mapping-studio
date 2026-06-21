@@ -51,10 +51,6 @@ function getLockById(project: LockMapProject, id: string): LockMechanism | undef
   return project.locks.find((l) => l.id === id);
 }
 
-function getPuzzleById(project: LockMapProject, id: string): PuzzleSolution | undefined {
-  return project.puzzles.find((p) => p.id === id);
-}
-
 function getPuzzleForLock(project: LockMapProject, lockId: string): PuzzleSolution | undefined {
   return project.puzzles.find((p) => p.intendedLockId === lockId);
 }
