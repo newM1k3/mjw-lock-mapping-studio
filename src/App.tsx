@@ -41,6 +41,7 @@ export default function App() {
   const [ctx, setCtx] = useState<RoomContext | null>(null);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [loadingRoom, setLoadingRoom] = useState(false);
 
   // SSO token handoff + resolve the venue's rooms, then load the active room's lock map.
   useEffect(() => {
@@ -79,13 +80,18 @@ export default function App() {
 
   // Switch the active room: load (or Story-seed) its lock map.
   const selectRoom = useCallback(async (room: RoomOption) => {
-    setActiveRoomId(room.id);
-    const loaded = await loadLockMap(room);
-    const c = detectConflicts(loaded);
-    setProject(loaded);
-    setConflicts(c);
-    setCards(generateImplementationCards(loaded, c));
-    setStep(1);
+    setActiveRoomId(room.id); // move the highlight immediately for instant feedback
+    setLoadingRoom(true);
+    try {
+      const loaded = await loadLockMap(room);
+      const c = detectConflicts(loaded);
+      setProject(loaded);
+      setConflicts(c);
+      setCards(generateImplementationCards(loaded, c));
+      setStep(1);
+    } finally {
+      setLoadingRoom(false);
+    }
   }, []);
 
   // Auto-save the active room's lock map when reaching the export panel (step 7).
@@ -132,6 +138,7 @@ export default function App() {
           rooms={ctx?.rooms ?? []}
           activeRoomId={activeRoomId}
           onSelectRoom={selectRoom}
+          loadingRoom={loadingRoom}
         />
       )}
       {step === 2 && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, ArrowRight, DoorOpen } from 'lucide-react';
+import { Sparkles, ArrowRight, DoorOpen, Loader2 } from 'lucide-react';
 import { LockMapProject, RoomStructure } from '../types/lockmap';
 import type { RoomOption } from '../lib/lockmap';
 
@@ -11,6 +11,7 @@ interface Props {
   rooms?: RoomOption[];
   activeRoomId?: string | null;
   onSelectRoom?: (room: RoomOption) => void;
+  loadingRoom?: boolean;
 }
 
 const ROOM_STRUCTURES: { value: RoomStructure; label: string; desc: string }[] = [
@@ -28,7 +29,7 @@ const DESIGN_STAGES = [
   'Operational',
 ];
 
-export default function ProjectSetup({ project, onChange, onLoadDemo, onNext, rooms, activeRoomId, onSelectRoom }: Props) {
+export default function ProjectSetup({ project, onChange, onLoadDemo, onNext, rooms, activeRoomId, onSelectRoom, loadingRoom }: Props) {
   function set(field: keyof LockMapProject, value: string) {
     onChange({ ...project, [field]: value });
   }
@@ -61,7 +62,8 @@ export default function ProjectSetup({ project, onChange, onLoadDemo, onNext, ro
               <button
                 key={room.id}
                 onClick={() => onSelectRoom(room)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all group ${
+                disabled={loadingRoom}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all group disabled:opacity-60 disabled:cursor-wait ${
                   room.id === activeRoomId
                     ? 'border-cyan-500/50 bg-cyan-500/10'
                     : 'border-slate-700 bg-slate-900/60 hover:border-cyan-500/40 hover:bg-cyan-500/5'
@@ -71,7 +73,9 @@ export default function ProjectSetup({ project, onChange, onLoadDemo, onNext, ro
                   {room.title}
                 </span>
                 {room.id === activeRoomId && (
-                  <span className="text-xs text-cyan-400 shrink-0 ml-4">Active</span>
+                  loadingRoom
+                    ? <Loader2 className="w-3.5 h-3.5 text-cyan-400 shrink-0 ml-4 animate-spin" />
+                    : <span className="text-xs text-cyan-400 shrink-0 ml-4">Active</span>
                 )}
               </button>
             ))}
