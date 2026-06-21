@@ -11,7 +11,14 @@ import { LockMapProject, LockMappingConflict, ImplementationCard } from './types
 import { demoProject } from './data/demoProject';
 import { detectConflicts } from './utils/lockMappingRules';
 import { generateImplementationCards } from './utils/generateCards';
-import { pb, saveProject, loadProjects, type SavedProjectMeta } from './lib/pocketbase';
+import { pb } from './lib/pocketbase';
+import {
+  resolveRoomContext,
+  loadLockMap,
+  saveLockMap,
+  type RoomContext,
+  type RoomOption,
+} from './lib/lockmap';
 
 const emptyProject = (): LockMapProject => ({
   id: crypto.randomUUID(),
@@ -31,10 +38,11 @@ export default function App() {
   const [project, setProject] = useState<LockMapProject>(emptyProject());
   const [conflicts, setConflicts] = useState<LockMappingConflict[]>([]);
   const [cards, setCards] = useState<ImplementationCard[]>([]);
-  const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>([]);
+  const [ctx, setCtx] = useState<RoomContext | null>(null);
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // SSO token handoff + load saved projects on mount
+  // SSO token handoff + resolve the venue's rooms, then load the active room's lock map.
   useEffect(() => {
     async function initApp() {
       const params = new URLSearchParams(window.location.search);
@@ -46,29 +54,52 @@ export default function App() {
         } catch {
           pb.authStore.clear();
         }
-        window.history.replaceState({}, '', window.location.pathname);
       }
+      // Optional ?room= deep-link (forward-compatible with the dash launcher).
+      const roomParam = params.get('room');
+      window.history.replaceState({}, '', window.location.pathname);
 
-      const projects = await loadProjects();
-      setSavedProjects(projects);
+      const resolved = await resolveRoomContext();
+      if (!resolved) return; // not signed in / no venue → stays on the blank/demo flow
+      setCtx(resolved);
+
+      const room =
+        resolved.rooms.find((r) => r.id === roomParam) ?? resolved.rooms[0] ?? null;
+      if (room) {
+        setActiveRoomId(room.id);
+        const loaded = await loadLockMap(room);
+        const c = detectConflicts(loaded);
+        setProject(loaded);
+        setConflicts(c);
+        setCards(generateImplementationCards(loaded, c));
+      }
     }
     void initApp();
   }, []);
 
-  // Auto-save when reaching the export panel (step 7)
+  // Switch the active room: load (or Story-seed) its lock map.
+  const selectRoom = useCallback(async (room: RoomOption) => {
+    setActiveRoomId(room.id);
+    const loaded = await loadLockMap(room);
+    const c = detectConflicts(loaded);
+    setProject(loaded);
+    setConflicts(c);
+    setCards(generateImplementationCards(loaded, c));
+    setStep(1);
+  }, []);
+
+  // Auto-save the active room's lock map when reaching the export panel (step 7).
   const persistProject = useCallback(async (p: LockMapProject) => {
-    if (!pb.authStore.isValid) return;
+    if (!pb.authStore.isValid || !ctx || !activeRoomId) return;
     setIsSaving(true);
     try {
-      await saveProject(p);
-      const refreshed = await loadProjects();
-      setSavedProjects(refreshed);
+      await saveLockMap(ctx, activeRoomId, p);
     } catch (err) {
-      console.warn('Lock Mapping Studio: project save failed', err);
+      console.warn('Lock Mapping Studio: lock map save failed', err);
     } finally {
       setIsSaving(false);
     }
-  }, []);
+  }, [ctx, activeRoomId]);
 
   function loadDemo() {
     const c = detectConflicts(demoProject);
@@ -77,16 +108,6 @@ export default function App() {
     setConflicts(c);
     setCards(k);
     setStep(5);
-  }
-
-  function loadSavedProject(meta: SavedProjectMeta) {
-    const p = meta.project;
-    const c = detectConflicts(p);
-    const k = generateImplementationCards(p, c);
-    setProject(p);
-    setConflicts(c);
-    setCards(k);
-    setStep(1);
   }
 
   function next() {
@@ -108,8 +129,9 @@ export default function App() {
           onChange={setProject}
           onLoadDemo={loadDemo}
           onNext={next}
-          savedProjects={savedProjects}
-          onLoadSaved={loadSavedProject}
+          rooms={ctx?.rooms ?? []}
+          activeRoomId={activeRoomId}
+          onSelectRoom={selectRoom}
         />
       )}
       {step === 2 && (
