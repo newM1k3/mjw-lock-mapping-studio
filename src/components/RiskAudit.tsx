@@ -1,12 +1,19 @@
-import React from 'react';
-import { ShieldAlert, ShieldCheck, AlertTriangle, Info, ArrowRight } from 'lucide-react';
-import { LockMapProject, LockMappingConflict, RiskLevel } from '../types/lockmap';
+import React, { useState } from 'react';
+import { ShieldAlert, ShieldCheck, AlertTriangle, Info, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { LockMapProject, LockMappingConflict, ImplementationCard, RiskLevel } from '../types/lockmap';
 import { detectConflicts, calculateRiskScore, riskLabel } from '../utils/lockMappingRules';
+
+export interface AiAuditResult {
+  summary: string;
+  conflicts: LockMappingConflict[];
+  implementationCards: ImplementationCard[];
+}
 
 interface Props {
   project: LockMapProject;
   conflicts: LockMappingConflict[];
   onConflictsChange: (conflicts: LockMappingConflict[]) => void;
+  onAiResults: (result: AiAuditResult) => void;
   onNext: () => void;
   onBack: () => void;
 }
@@ -17,9 +24,42 @@ const RISK_CONFIG: Record<RiskLevel, { label: string; borderClass: string; bgCla
   low: { label: 'Low Risk', borderClass: 'border-emerald-500/40', bgClass: 'bg-emerald-500/8', textClass: 'text-emerald-300', Icon: Info },
 };
 
-export default function RiskAudit({ project, conflicts, onConflictsChange, onNext, onBack }: Props) {
+export default function RiskAudit({ project, conflicts, onConflictsChange, onAiResults, onNext, onBack }: Props) {
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+
   function runAudit() {
     onConflictsChange(detectConflicts(project));
+  }
+
+  async function runAiDeepen() {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      // Always send the freshest local audit alongside the project so the AI
+      // deepens rather than re-derives what the rule engine already found.
+      const localConflicts = conflicts.length > 0 ? conflicts : detectConflicts(project);
+      const res = await fetch('/.netlify/functions/generate-lockmap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project, localConflicts }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.error) {
+        throw new Error(data?.error ?? 'AI audit failed. Please try again.');
+      }
+      setAiSummary(typeof data.summary === 'string' && data.summary ? data.summary : null);
+      onAiResults({
+        summary: data.summary ?? '',
+        conflicts: Array.isArray(data.conflicts) ? data.conflicts : [],
+        implementationCards: Array.isArray(data.implementationCards) ? data.implementationCards : [],
+      });
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'AI audit failed. Please try again.');
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   const score = calculateRiskScore(conflicts);
@@ -35,9 +75,32 @@ export default function RiskAudit({ project, conflicts, onConflictsChange, onNex
         <p className="text-slate-400 text-sm">Automated analysis of duplicate input signatures, ambiguous puzzle-to-lock mappings, and reset safety concerns.</p>
       </div>
 
-      <button onClick={runAudit} className="btn-primary mb-8 flex items-center gap-2">
-        <ShieldAlert className="w-4 h-4" /> Run Risk Audit
-      </button>
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
+        <button onClick={runAudit} className="btn-primary flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4" /> Run Risk Audit
+        </button>
+        <button
+          onClick={() => void runAiDeepen()}
+          disabled={aiLoading || project.locks.length === 0}
+          className="btn-ghost flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={project.locks.length === 0 ? 'Add locks before running the AI audit' : 'Send this lock map to AI for a deeper, theme-specific audit'}
+        >
+          {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {aiLoading ? 'Deepening audit…' : 'AI Deepen'}
+        </button>
+      </div>
+
+      {aiError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/8 text-red-300 text-sm px-4 py-3 mb-6">
+          {aiError}
+        </div>
+      )}
+      {aiSummary && !aiError && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/8 px-4 py-3 mb-6 flex items-start gap-2.5">
+          <Sparkles className="w-4 h-4 text-violet-300 shrink-0 mt-0.5" />
+          <p className="text-sm text-violet-200 leading-relaxed">{aiSummary}</p>
+        </div>
+      )}
 
       {conflicts.length > 0 ? (
         <>
@@ -78,7 +141,14 @@ export default function RiskAudit({ project, conflicts, onConflictsChange, onNex
                   <div className="flex items-start gap-3 mb-3">
                     <cfg.Icon className={`w-5 h-5 ${cfg.textClass} shrink-0 mt-0.5`} />
                     <div>
-                      <div className={`font-semibold text-sm ${cfg.textClass}`}>{cfg.label} — Input Signature <code className="font-mono bg-slate-800/60 px-1.5 py-0.5 rounded text-xs">{conflict.inputSignature}</code> at {conflict.stage}</div>
+                      <div className={`font-semibold text-sm ${cfg.textClass}`}>
+                        {cfg.label} — Input Signature <code className="font-mono bg-slate-800/60 px-1.5 py-0.5 rounded text-xs">{conflict.inputSignature}</code> at {conflict.stage}
+                        {conflict.id.startsWith('ai-') && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-xs bg-violet-500/15 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded-full align-middle">
+                            <Sparkles className="w-3 h-3" /> AI
+                          </span>
+                        )}
+                      </div>
                       <p className="text-slate-300 text-sm mt-2 leading-relaxed">{conflict.diagnosis}</p>
                     </div>
                   </div>

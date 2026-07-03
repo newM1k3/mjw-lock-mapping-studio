@@ -4,7 +4,7 @@ import ProjectSetup from './components/ProjectSetup';
 import ZoneBuilder from './components/ZoneBuilder';
 import LockInventory from './components/LockInventory';
 import PuzzleMatrix from './components/PuzzleMatrix';
-import RiskAudit from './components/RiskAudit';
+import RiskAudit, { type AiAuditResult } from './components/RiskAudit';
 import ImplementationCards from './components/ImplementationCards';
 import ExportPanel from './components/ExportPanel';
 import { LockMapProject, LockMappingConflict, ImplementationCard } from './types/lockmap';
@@ -107,6 +107,13 @@ export default function App() {
     }
   }, [ctx, activeRoomId]);
 
+  // Merge an AI Deepen pass into the audit: AI items (ids prefixed "ai-") replace
+  // any previous AI results but never touch the rule-engine conflicts/cards.
+  const applyAiResults = useCallback((result: AiAuditResult) => {
+    setConflicts((prev) => [...prev.filter((c) => !c.id.startsWith('ai-')), ...result.conflicts]);
+    setCards((prev) => [...prev.filter((c) => !c.id.startsWith('ai-')), ...result.implementationCards]);
+  }, []);
+
   function loadDemo() {
     const c = detectConflicts(demoProject);
     const k = generateImplementationCards(demoProject, c);
@@ -170,6 +177,7 @@ export default function App() {
           project={project}
           conflicts={conflicts}
           onConflictsChange={setConflicts}
+          onAiResults={applyAiResults}
           onNext={next}
           onBack={back}
         />
