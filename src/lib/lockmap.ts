@@ -8,6 +8,7 @@
 
 import pb from './pocketbase';
 import type { LockMapProject, RoomStructure } from '../types/lockmap';
+import { isGeneratedRoomPayload, seedFromGeneratedRoom, STATUS_TO_STAGE } from '../utils/seedFromGenerated';
 
 type Rec = Record<string, unknown>;
 
@@ -28,15 +29,6 @@ export interface RoomContext {
 const ROOM_STRUCTURES: RoomStructure[] = ['linear', 'semi-linear', 'open-world'];
 const okStructure = (v: unknown): RoomStructure =>
   ROOM_STRUCTURES.includes(v as RoomStructure) ? (v as RoomStructure) : 'linear';
-
-// Room lifecycle (experiences.status) → the tool's design-stage labels (best-effort seed).
-const STATUS_TO_STAGE: Record<string, string> = {
-  draft: 'Concept / Ideation',
-  review: 'Design review',
-  approved: 'Pre-production',
-  live: 'Operational',
-  retired: '',
-};
 
 /**
  * Resolve the venue + rooms for the signed-in user: the first project under their first
@@ -75,8 +67,16 @@ export async function resolveRoomContext(): Promise<RoomContext | null> {
   return null;
 }
 
-/** Seed a fresh lock map from a room's Story so it never starts blank. */
+/**
+ * Seed a fresh lock map from a room's Story so it never starts blank.
+ * Rooms sent from the AI Room Generator carry their full generated document in
+ * design_parameters — those seed complete zones, locks, and puzzle mappings.
+ */
 export function seedFromRoom(e: Rec): LockMapProject {
+  if (isGeneratedRoomPayload(e.design_parameters)) {
+    return seedFromGeneratedRoom(e.design_parameters.room, (e.status as string) || '');
+  }
+
   return {
     id: crypto.randomUUID(),
     title: (e.title as string) ?? '',
