@@ -27,8 +27,8 @@ export default function Layout({ currentStep, onStepClick, children }: LayoutPro
             <Lock className="w-4 h-4 text-cyan-400" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-white leading-none">LockMap Studio</div>
-            <div className="text-xs text-slate-500 mt-0.5">MJW Platform</div>
+            <div className="text-sm font-semibold text-white leading-none">Locks</div>
+            <div className="text-xs text-slate-500 mt-0.5">ImmersiveKit</div>
           </div>
         </div>
 

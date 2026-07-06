@@ -101,7 +101,7 @@ export default function App() {
     try {
       await saveLockMap(ctx, activeRoomId, p);
     } catch (err) {
-      console.warn('Lock Mapping Studio: lock map save failed', err);
+      console.warn('Locks: lock map save failed', err);
     } finally {
       setIsSaving(false);
     }

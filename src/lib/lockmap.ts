@@ -1,4 +1,4 @@
-// lockmap.ts — Lock Mapping Studio on the unified spine (Phase 3).
+// lockmap.ts — Locks on the unified spine (Phase 3).
 //
 // A lock map is a room-scoped drawer (tool_key=lock_mapping, scope=room). The room is a
 // platform `experiences` record, resolved via the user's org membership; its venue is the
