@@ -34,7 +34,9 @@ export default async (req: Request) => {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 6000,
+      // Headroom matters: 4 conflicts + 8 verbose cards can exceed 6k tokens,
+      // and a truncated response fails JSON.parse below.
+      max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -44,6 +46,10 @@ export default async (req: Request) => {
       ],
     });
 
+    if (message.stop_reason === 'max_tokens') {
+      throw new Error('AI response was truncated at the output token limit');
+    }
+
     const textContent = message.content.find((c) => c.type === 'text');
     if (!textContent || textContent.type !== 'text') {
       throw new Error('No text content in response');
@@ -51,6 +57,11 @@ export default async (req: Request) => {
 
     let rawJson = textContent.text.trim();
     rawJson = rawJson.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    const firstBrace = rawJson.indexOf('{');
+    const lastBrace = rawJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      rawJson = rawJson.slice(firstBrace, lastBrace + 1);
+    }
 
     const parsed = JSON.parse(rawJson) as Record<string, unknown>;
     const conflicts = sanitiseConflicts(parsed.conflicts, job.project);
@@ -74,7 +85,8 @@ export default async (req: Request) => {
     if (jobId) {
       const existing = await store.get(jobId, { type: 'json' }).catch(() => null) as AuditJob | null;
       if (existing) {
-        await store.setJSON(jobId, { ...existing, status: 'failed', error: 'AI audit failed. Please try again.' } satisfies AuditJob).catch((writeErr) => {
+        const debug = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        await store.setJSON(jobId, { ...existing, status: 'failed', error: 'AI audit failed. Please try again.', debug } satisfies AuditJob).catch((writeErr) => {
           console.error('Failed to record audit job failure', { jobId, writeErr });
         });
       }

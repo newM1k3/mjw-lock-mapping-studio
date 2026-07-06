@@ -22,7 +22,7 @@ export default async (req: Request) => {
   return jsonRes(200, {
     status: job.status,
     ...(job.status === 'complete' ? { result: job.result } : {}),
-    ...(job.status === 'failed' ? { error: job.error || 'AI audit failed. Please try again.' } : {}),
+    ...(job.status === 'failed' ? { error: job.error || 'AI audit failed. Please try again.', debug: job.debug } : {}),
   }, {
     'Cache-Control': 'no-store',
   });

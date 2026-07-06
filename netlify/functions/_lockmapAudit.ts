@@ -19,6 +19,7 @@ export type AuditJob = {
   localConflicts: LockMappingConflict[];
   result?: { summary: string; conflicts: LockMappingConflict[]; implementationCards: ImplementationCard[] };
   error?: string;
+  debug?: string; // error class + message for diagnostics; not shown in the UI
 };
 
 export function jsonRes(status: number, payload: unknown, headers: Record<string, string> = {}): Response {
