@@ -9,9 +9,6 @@
 [functions]
   node_bundler = "esbuild"
 
-[functions.generate-lockmap]
-  timeout = 26
-
 [[redirects]]
   from = "/*"
   to = "/index.html"

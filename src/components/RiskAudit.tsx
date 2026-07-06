@@ -40,26 +40,57 @@ export default function RiskAudit({ project, conflicts, onConflictsChange, onAiR
       // Always send the freshest local audit alongside the project so the AI
       // deepens rather than re-derives what the rule engine already found.
       const localConflicts = conflicts.length > 0 ? conflicts : detectConflicts(project);
-      const res = await fetch('/.netlify/functions/generate-lockmap', {
+
+      // The AI pass takes 30-90s, beyond Netlify's synchronous limit, so the
+      // endpoint queues a background job and we poll for the result.
+      const startRes = await fetch('/.netlify/functions/generate-lockmap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project, localConflicts }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data || data.error) {
-        throw new Error(data?.error ?? 'AI audit failed. Please try again.');
+      const startData = await startRes.json().catch(() => null);
+      if (!startRes.ok || !startData?.jobId) {
+        throw new Error(startData?.error ?? 'AI audit failed. Please try again.');
       }
-      setAiSummary(typeof data.summary === 'string' && data.summary ? data.summary : null);
-      onAiResults({
-        summary: data.summary ?? '',
-        conflicts: Array.isArray(data.conflicts) ? data.conflicts : [],
-        implementationCards: Array.isArray(data.implementationCards) ? data.implementationCards : [],
-      });
+
+      const result = await pollForAuditResult(startData.jobId as string);
+      setAiSummary(result.summary || null);
+      onAiResults(result);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : 'AI audit failed. Please try again.');
     } finally {
       setAiLoading(false);
     }
+  }
+
+  async function pollForAuditResult(jobId: string): Promise<AiAuditResult> {
+    const deadline = Date.now() + 3 * 60 * 1000;
+
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      const res = await fetch(`/.netlify/functions/generate-lockmap-status?jobId=${encodeURIComponent(jobId)}`);
+      if (res.status === 404) {
+        throw new Error('AI audit job was not found. Please try again.');
+      }
+      if (!res.ok) continue; // transient poll failure — keep waiting until the deadline
+
+      const data = await res.json().catch(() => null);
+      if (!data) continue;
+
+      if (data.status === 'complete' && data.result) {
+        return {
+          summary: typeof data.result.summary === 'string' ? data.result.summary : '',
+          conflicts: Array.isArray(data.result.conflicts) ? data.result.conflicts : [],
+          implementationCards: Array.isArray(data.result.implementationCards) ? data.result.implementationCards : [],
+        };
+      }
+      if (data.status === 'failed') {
+        throw new Error(data.error || 'AI audit failed. Please try again.');
+      }
+    }
+
+    throw new Error('AI audit is taking longer than expected. Please try again.');
   }
 
   const score = calculateRiskScore(conflicts);
@@ -86,7 +117,7 @@ export default function RiskAudit({ project, conflicts, onConflictsChange, onAiR
           title={project.locks.length === 0 ? 'Add locks before running the AI audit' : 'Send this lock map to AI for a deeper, theme-specific audit'}
         >
           {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {aiLoading ? 'Deepening audit…' : 'AI Deepen'}
+          {aiLoading ? 'Deepening audit… (takes about a minute)' : 'AI Deepen'}
         </button>
       </div>
 
@@ -174,9 +205,16 @@ export default function RiskAudit({ project, conflicts, onConflictsChange, onAiR
           </div>
         </>
       ) : (
-        <div className="card text-center text-slate-500 py-12 mb-10">
-          <ShieldCheck className="w-10 h-10 mx-auto mb-3 text-slate-700" />
-          Run the audit to analyse your project for lock mapping conflicts.
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-5 mb-10 flex items-center gap-5">
+          <ShieldCheck className="w-8 h-8 text-emerald-400 shrink-0" />
+          <div>
+            <div className="font-semibold text-base text-emerald-300">Audit clean — 0 conflicts detected</div>
+            <div className="text-slate-400 text-sm mt-0.5">
+              {project.locks.length > 0
+                ? `Every lock's input signature is unique at its stage, so no puzzle solution can be mistaken for another lock's code. Use AI Deepen for a theme-specific second opinion.`
+                : 'Add locks and puzzles, then run the audit to analyse your mapping for conflicts.'}
+            </div>
+          </div>
         </div>
       )}
 
