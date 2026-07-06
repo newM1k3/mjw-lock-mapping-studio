@@ -41,7 +41,9 @@ export default async (req: Request) => {
     };
     await store.setJSON(jobId, job);
 
-    const origin = process.env.URL || new URL(req.url).origin;
+    // Prefer the live request origin: env.URL is baked at deploy time and goes
+    // stale when the site's domain changes (as in the suite-wide rebrand).
+    const origin = new URL(req.url).origin || process.env.URL;
     const invokeResponse = await fetch(new URL('/.netlify/functions/generate-lockmap-background', origin), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
